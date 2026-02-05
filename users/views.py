@@ -6,6 +6,20 @@ from io import BytesIO
 from django.core.files import File
 from pyzbar.pyzbar import decode
 from PIL import Image
+import cv2
+import numpy as np
+from django.shortcuts import render
+from django.http import JsonResponse
+
+# QR scan function
+def scan_qr(image_file):
+    file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+    detector = cv2.QRCodeDetector()
+    data, bbox, _ = detector.detectAndDecode(img)
+
+    return data
 
 # Registration View
 def register_customer(request):
