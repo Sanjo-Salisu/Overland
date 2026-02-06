@@ -12,10 +12,13 @@ from .forms import CustomerRegistrationForm
 from .models import Customer
 
 # ===============================
-# OpenCV QR scan function
+# OpenCV QR scan helper function
 # ===============================
-def scan_qr(image_file):
-    """Decode a QR code from an uploaded image safely."""
+def decode_qr(image_file):
+    """
+    Decode a QR code from an uploaded image safely.
+    Returns the QR data string (JSON) or None if decoding fails.
+    """
     if not image_file:
         return None
 
@@ -33,19 +36,23 @@ def scan_qr(image_file):
     if not data:
         return None
 
-    return data  # Returns QR code string (JSON in our case)
+    return data  # QR code string (JSON)
 
 
 # ===============================
 # Customer Registration View
 # ===============================
 def register_customer(request):
+    """
+    Handles customer registration and generates a QR code
+    containing all customer info.
+    """
     if request.method == 'POST':
         form = CustomerRegistrationForm(request.POST)
         if form.is_valid():
             customer = form.save(commit=False)
 
-            # Prepare data to store in QR code (all customer info as JSON)
+            # Prepare data for QR code
             customer_data = {
                 "name": customer.name,
                 "email": customer.email,
@@ -55,7 +62,7 @@ def register_customer(request):
             qr_data = json.dumps(customer_data)  # Convert dict to JSON string
             qr_img = qrcode.make(qr_data)
 
-            # Save QR code image to customer.qr_code field
+            # Save QR code image to customer.qr_code
             buffer = BytesIO()
             qr_img.save(buffer, 'PNG')
             filename = f"{customer.email}_qr.png"
@@ -73,7 +80,11 @@ def register_customer(request):
 # ===============================
 # QR Code Scanning View
 # ===============================
-def scan_qr(request):
+def scan_qr_view(request):
+    """
+    Handles QR code uploads, decodes them, and displays
+    customer information.
+    """
     customer_data = None
     message = ''
 
@@ -81,11 +92,10 @@ def scan_qr(request):
         qr_image = request.FILES.get('qr_image')
 
         if qr_image:
-            qr_text = scan_qr(qr_image)  # Decode QR code
+            qr_text = decode_qr(qr_image)  # Use helper function
 
             if qr_text:
                 try:
-                    # Decode JSON string from QR code
                     customer_data = json.loads(qr_text)
                 except json.JSONDecodeError:
                     message = "Invalid QR code data."
@@ -94,4 +104,9 @@ def scan_qr(request):
         else:
             message = "Please upload a valid image."
 
-    return render(request, 'users/scan_qr.html', {'customer_data': customer_data, 'message': message})
+    # Always return a response (even for GET)
+    return render(
+        request,
+        'users/scan_qr.html',
+        {'customer_data': customer_data, 'message': message}
+    )
