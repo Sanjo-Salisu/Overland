@@ -16,27 +16,30 @@ from .models import Customer
 # ===============================
 def decode_qr(image_file):
     """
-    Decode a QR code from an uploaded image safely.
+    Safely decode a QR code from an uploaded image.
     Returns the QR data string (JSON) or None if decoding fails.
     """
     if not image_file:
         return None
 
+    # Read file into bytes
     file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
     if file_bytes.size == 0:
         return None
 
+    # Decode image using OpenCV
     img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     if img is None:
         return None
 
+    # Detect and decode QR code
     detector = cv2.QRCodeDetector()
     data, bbox, _ = detector.detectAndDecode(img)
 
     if not data:
         return None
 
-    return data  # QR code string (JSON)
+    return data.strip()  # remove any whitespace or newlines
 
 
 # ===============================
@@ -59,15 +62,24 @@ def register_customer(request):
                 "phone": customer.phone,
                 "address": customer.address,
             }
-            qr_data = json.dumps(customer_data)  # Convert dict to JSON string
-            qr_img = qrcode.make(qr_data)
+            qr_data = json.dumps(customer_data, ensure_ascii=False)
 
-            # Save QR code image to customer.qr_code
+            # Use QRCode object for precise encoding
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="black", back_color="white")
+
+            # Save QR code image to customer.qr_code field
             buffer = BytesIO()
             qr_img.save(buffer, 'PNG')
             filename = f"{customer.email}_qr.png"
             customer.qr_code.save(filename, File(buffer), save=False)
-
             customer.save()
 
             return render(request, 'users/registration_success.html', {'customer': customer})
@@ -92,7 +104,7 @@ def scan_qr_view(request):
         qr_image = request.FILES.get('qr_image')
 
         if qr_image:
-            qr_text = decode_qr(qr_image)  # Use helper function
+            qr_text = decode_qr(qr_image)
 
             if qr_text:
                 try:
@@ -104,7 +116,7 @@ def scan_qr_view(request):
         else:
             message = "Please upload a valid image."
 
-    # Always return a response (even for GET)
+    # Always return a response (even for GET requests)
     return render(
         request,
         'users/scan_qr.html',
